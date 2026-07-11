@@ -86,7 +86,11 @@ export default function Home() {
             state={live.weather.state}
             lang={lang}
           />
-          <AdvisoryCard state={live.weather.state} lang={lang} />
+          <AdvisoryCard
+            key={live.weather.state ?? ""}
+            state={live.weather.state}
+            lang={lang}
+          />
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:mt-6 lg:grid-cols-3 lg:items-start lg:gap-6">

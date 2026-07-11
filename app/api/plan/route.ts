@@ -65,6 +65,7 @@ export async function POST(req: Request) {
       // JSON mode — the model must return a single JSON object.
       response_format: { type: "json_object" },
       temperature: 0.5,
+      max_tokens: 1200,
       messages: buildPlanMessages(profile, weather, lang),
     });
 

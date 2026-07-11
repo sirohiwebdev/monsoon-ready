@@ -78,7 +78,7 @@ export default function ConditionsBar({
 
         <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
           <span>
-            {t.updated} {lastUpdated ? formatRelative(lastUpdated) : "—"}
+            {t.updated} {lastUpdated ? formatRelative(lastUpdated, lang) : "—"}
           </span>
           <button
             type="button"

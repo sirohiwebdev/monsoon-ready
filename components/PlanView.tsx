@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Lang, Plan } from "@/lib/types";
-import { STRINGS } from "@/lib/i18n";
+import { STRINGS, type UIStrings } from "@/lib/i18n";
 
 interface PlanViewProps {
   plan: Plan;
@@ -138,7 +138,7 @@ function Contacts({ contacts }: { contacts: Plan["contacts"] }) {
   );
 }
 
-function planToText(plan: Plan, t: (typeof STRINGS)[Lang]): string {
+function planToText(plan: Plan, t: UIStrings): string {
   const lines: string[] = [
     `${t.planTitle}: ${plan.headline}`,
     "",

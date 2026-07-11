@@ -27,7 +27,9 @@ export async function GET(req: Request) {
       }
       const { place: name, state } = await reverseGeocode(latitude, longitude);
       const summary = await getWeatherSummary(latitude, longitude, name, state);
-      return NextResponse.json(summary);
+      return NextResponse.json(summary, {
+        headers: { "Cache-Control": "public, max-age=60, s-maxage=60" },
+      });
     }
 
     if (place) {
@@ -44,7 +46,9 @@ export async function GET(req: Request) {
         geo.place,
         geo.state,
       );
-      return NextResponse.json(summary);
+      return NextResponse.json(summary, {
+        headers: { "Cache-Control": "public, max-age=60, s-maxage=60" },
+      });
     }
 
     return NextResponse.json(

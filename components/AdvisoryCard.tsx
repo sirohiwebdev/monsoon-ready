@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Megaphone, ShieldCheck } from "lucide-react";
 import type { Advisory, Lang } from "@/lib/types";
 import { STRINGS } from "@/lib/i18n";
 import { fetchAdvisories } from "@/lib/client";
+
+const LOCALE: Record<Lang, string> = {
+  en: "en-IN",
+  hi: "hi-IN",
+  mr: "mr-IN",
+};
 
 interface AdvisoryCardProps {
   state: string | null;
@@ -26,18 +32,10 @@ const DOT_CLASS: Record<Advisory["severityColor"], string> = {
  * government source when the feed itself is unreachable is indistinguishable
  * from "no alerts", so both cases get the same calm message.
  */
-export default function AdvisoryCard({ state, lang }: AdvisoryCardProps) {
+function AdvisoryCard({ state, lang }: AdvisoryCardProps) {
   const t = STRINGS[lang];
   const [advisories, setAdvisories] = useState<Advisory[]>([]);
   const [checked, setChecked] = useState(false);
-  const [prevKey, setPrevKey] = useState<string | null>(state);
-
-  // Reset when the state prop changes — during render, not in an effect.
-  if (state !== prevKey) {
-    setPrevKey(state);
-    setAdvisories([]);
-    setChecked(false);
-  }
 
   useEffect(() => {
     if (!state) return;
@@ -99,15 +97,12 @@ export default function AdvisoryCard({ state, lang }: AdvisoryCardProps) {
                   <>
                     {" · "}
                     {t.activeUntil}{" "}
-                    {new Date(a.effectiveEnd).toLocaleString(
-                      lang === "en" ? "en-IN" : lang,
-                      {
-                        day: "numeric",
-                        month: "short",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      },
-                    )}
+                    {new Date(a.effectiveEnd).toLocaleString(LOCALE[lang], {
+                      day: "numeric",
+                      month: "short",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
                   </>
                 )}
               </p>
@@ -118,3 +113,5 @@ export default function AdvisoryCard({ state, lang }: AdvisoryCardProps) {
     </div>
   );
 }
+
+export default memo(AdvisoryCard);

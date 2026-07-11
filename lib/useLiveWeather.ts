@@ -29,11 +29,13 @@ export function useLiveWeather() {
   });
   const locRef = useRef<LocationInput | null>(null);
   const lastUpdatedRef = useRef<number | null>(null);
+  const refreshingRef = useRef(false);
 
   const load = useCallback(
     async (loc: LocationInput, opts?: { silent?: boolean }) => {
-      if (state.refreshing && opts?.silent) return;
+      if (refreshingRef.current && opts?.silent) return;
       locRef.current = loc;
+      refreshingRef.current = true;
       setState((s) => ({
         ...s,
         refreshing: true,
@@ -46,6 +48,7 @@ export function useLiveWeather() {
             : await fetchWeatherByCoords(loc.lat, loc.lon);
         const now = Date.now();
         lastUpdatedRef.current = now;
+        refreshingRef.current = false;
         setState({
           weather: w,
           lastUpdated: now,
@@ -53,10 +56,10 @@ export function useLiveWeather() {
           error: null,
         });
       } catch (err) {
+        refreshingRef.current = false;
         setState((s) => ({
           ...s,
           refreshing: false,
-          // Stale-while-revalidate: never blank good data because a refresh failed.
           error: s.weather
             ? null
             : err instanceof Error
@@ -65,7 +68,7 @@ export function useLiveWeather() {
         }));
       }
     },
-    [state.refreshing],
+    [],
   );
 
   const refresh = useCallback(() => {
@@ -75,6 +78,7 @@ export function useLiveWeather() {
   const reset = useCallback(() => {
     locRef.current = null;
     lastUpdatedRef.current = null;
+    refreshingRef.current = false;
     setState({
       weather: null,
       lastUpdated: null,
