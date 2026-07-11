@@ -5,6 +5,9 @@ import {
   reverseGeocode,
   WeatherError,
 } from "@/lib/weather";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("/api/weather");
 
 // GET /api/weather?place=Pune
 //     /api/weather?lat=18.52&lon=73.85
@@ -59,7 +62,7 @@ export async function GET(req: Request) {
     if (err instanceof WeatherError) {
       return NextResponse.json({ error: err.message }, { status: 502 });
     }
-    console.error("[/api/weather] unexpected error:", err);
+    log.error("unexpected error", { error: String(err) });
     return NextResponse.json(
       { error: "Something went wrong fetching the weather." },
       { status: 500 },

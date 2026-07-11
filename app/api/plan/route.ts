@@ -4,6 +4,9 @@ import { getClient, MissingKeyError, MODEL } from "@/lib/llm";
 import { buildPlanMessages } from "@/lib/prompts";
 import { planSchema } from "@/lib/plan-schema";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("/api/plan");
 
 // Validate the client request so a bad body fails fast with a clear message.
 const requestSchema = z.object({
@@ -89,10 +92,7 @@ export async function POST(req: Request) {
 
     const plan = planSchema.safeParse(json);
     if (!plan.success) {
-      console.error(
-        "[/api/plan] plan failed schema validation:",
-        plan.error.issues,
-      );
+      log.error("plan failed schema validation", { issues: plan.error.issues });
       return NextResponse.json(
         { error: "The AI plan was incomplete. Please try again." },
         { status: 502 },
@@ -107,21 +107,21 @@ export async function POST(req: Request) {
     if (err instanceof Error && "status" in err) {
       const status = (err as { status: number }).status;
       if (status === 404) {
-        console.error("[/api/plan] model not found:", MODEL);
+        log.error("model not found", { model: MODEL });
         return NextResponse.json(
           { error: "The AI model is unavailable. Please contact support." },
           { status: 502 },
         );
       }
       if (status === 429) {
-        console.error("[/api/plan] OpenAI rate limit hit");
+        log.warn("OpenAI rate limit hit");
         return NextResponse.json(
           { error: "The AI service is busy. Please try again in a moment." },
           { status: 503 },
         );
       }
     }
-    console.error("[/api/plan] unexpected error:", err);
+    log.error("unexpected error", { error: String(err) });
     return NextResponse.json(
       { error: "Couldn't generate your plan right now. Please try again." },
       { status: 500 },

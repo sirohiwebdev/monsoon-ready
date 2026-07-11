@@ -3,6 +3,9 @@ import { z } from "zod";
 import { getClient, MissingKeyError, MODEL } from "@/lib/llm";
 import { buildChatContext, buildChatMessages } from "@/lib/prompts";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("/api/chat");
 
 const requestSchema = z.object({
   question: z.string().trim().min(1).max(500),
@@ -83,21 +86,21 @@ export async function POST(req: Request) {
     if (err instanceof Error && "status" in err) {
       const status = (err as { status: number }).status;
       if (status === 404) {
-        console.error("[/api/chat] model not found:", MODEL);
+        log.error("model not found", { model: MODEL });
         return NextResponse.json(
           { error: "The AI model is unavailable. Please contact support." },
           { status: 502 },
         );
       }
       if (status === 429) {
-        console.error("[/api/chat] OpenAI rate limit hit");
+        log.warn("OpenAI rate limit hit");
         return NextResponse.json(
           { error: "The AI service is busy. Please try again in a moment." },
           { status: 503 },
         );
       }
     }
-    console.error("[/api/chat] unexpected error:", err);
+    log.error("unexpected error", { error: String(err) });
     return NextResponse.json(
       { error: "Couldn't answer right now. Please try again." },
       { status: 500 },

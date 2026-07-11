@@ -1,4 +1,8 @@
 import type { WeatherSummary } from "./types";
+import { withRetry } from "./retry";
+import { createLogger } from "./logger";
+
+const log = createLogger("weather");
 
 // Open-Meteo — free, no API key required.
 const GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search";
@@ -55,10 +59,18 @@ class WeatherError extends Error {}
 async function fetchJson<T>(url: string, what: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
+    res = await withRetry(
+      () =>
+        fetch(url, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(8000),
+        }),
+      {
+        maxAttempts: 2,
+        onRetry: (a, e) =>
+          log.warn("retrying fetch", { attempt: a, what, error: String(e) }),
+      },
+    );
   } catch {
     throw new WeatherError(
       `Could not reach the weather service (${what}). Check your connection.`,

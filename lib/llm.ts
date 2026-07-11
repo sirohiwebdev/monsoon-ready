@@ -16,14 +16,12 @@ export class MissingKeyError extends Error {
 /**
  * Returns a server-side OpenAI client. Throws MissingKeyError (friendly, user-facing)
  * when the key is absent so routes can return a clean message instead of a 500 stack.
- * The key never leaves the server.
+ * The key never leaves the server. A fresh client is created per call to avoid
+ * stale config across serverless cold starts; the OpenAI SDK reuses HTTP
+ * connections internally so the overhead is negligible.
  */
-let _client: OpenAI | null = null;
-
 export function getClient(): OpenAI {
-  if (_client) return _client;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new MissingKeyError();
-  _client = new OpenAI({ apiKey });
-  return _client;
+  return new OpenAI({ apiKey });
 }

@@ -167,23 +167,25 @@ export default function PlanView({ plan, lang }: PlanViewProps) {
   const [copied, setCopied] = useState(false);
 
   async function copyPlan() {
+    const text = planToText(plan, t);
     try {
-      await navigator.clipboard.writeText(planToText(plan, t));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
     } catch {
-      // Fallback for older browsers
+      // Fallback for browsers without Clipboard API (e.g. insecure contexts)
       const ta = document.createElement("textarea");
-      ta.value = planToText(plan, t);
+      ta.value = text;
       ta.style.position = "fixed";
       ta.style.opacity = "0";
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        document.execCommand("copy");
+      } finally {
+        document.body.removeChild(ta);
+      }
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (

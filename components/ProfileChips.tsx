@@ -53,12 +53,25 @@ function Chip({
         />
       )}
       {children}
-      {active && <Check size={16} strokeWidth={2.5} className="text-blue-600" aria-hidden />}
+      {active && (
+        <Check
+          size={16}
+          strokeWidth={2.5}
+          className="text-blue-600"
+          aria-hidden
+        />
+      )}
     </button>
   );
 }
 
-function FieldLabel({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+function FieldLabel({
+  icon: Icon,
+  children,
+}: {
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
   return (
     <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
       <Icon size={14} strokeWidth={2.25} aria-hidden />
@@ -67,7 +80,11 @@ function FieldLabel({ icon: Icon, children }: { icon: LucideIcon; children: Reac
   );
 }
 
-export default function ProfileChips({ profile, lang, onChange }: ProfileChipsProps) {
+export default function ProfileChips({
+  profile,
+  lang,
+  onChange,
+}: ProfileChipsProps) {
   const t = STRINGS[lang];
   const set = (patch: Partial<Profile>) => onChange({ ...profile, ...patch });
 
@@ -76,7 +93,7 @@ export default function ProfileChips({ profile, lang, onChange }: ProfileChipsPr
       {/* Household size */}
       <div>
         <FieldLabel icon={Users}>{t.household}</FieldLabel>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {HOUSEHOLD_OPTIONS.map((n) => (
             <Chip
               key={n}
@@ -86,6 +103,23 @@ export default function ProfileChips({ profile, lang, onChange }: ProfileChipsPr
               {n} {t.people(n)}
             </Chip>
           ))}
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={
+              HOUSEHOLD_OPTIONS.includes(profile.householdSize)
+                ? ""
+                : profile.householdSize
+            }
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isInteger(n) && n >= 1 && n <= 50)
+                set({ householdSize: n });
+            }}
+            placeholder="Custom"
+            className="min-h-11 w-20 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
+          />
         </div>
       </div>
 
@@ -114,7 +148,11 @@ export default function ProfileChips({ profile, lang, onChange }: ProfileChipsPr
       <div>
         <FieldLabel icon={Users}>{t.inHome}</FieldLabel>
         <div className="flex flex-wrap gap-2">
-          <Chip active={profile.hasKids} onClick={() => set({ hasKids: !profile.hasKids })} icon={Baby}>
+          <Chip
+            active={profile.hasKids}
+            onClick={() => set({ hasKids: !profile.hasKids })}
+            icon={Baby}
+          >
             {t.kids}
           </Chip>
           <Chip

@@ -1,12 +1,17 @@
 import { z } from "zod";
 import type { Advisory } from "./types";
+import { withRetry } from "./retry";
+import { createLogger } from "./logger";
+
+const log = createLogger("advisory");
 
 // NDMA SACHET's public alert feed — verified live, no auth required. This is an
 // undocumented internal endpoint of a .gov.in site, not a published/versioned
 // API: it can change shape or vanish without notice. Every step below degrades
 // to an empty result rather than throwing, and we never fabricate content
 // attributed to a government source.
-const SACHET_URL = "https://sachet.ndma.gov.in/cap_public_website/FetchAllAlertDetails";
+const SACHET_URL =
+  "https://sachet.ndma.gov.in/cap_public_website/FetchAllAlertDetails";
 const TIMEOUT_MS = 4000;
 
 const rawAlertSchema = z
@@ -23,19 +28,40 @@ const rawAlertSchema = z
   })
   .passthrough();
 
-const SEVERITY_RANK: Record<string, number> = { red: 0, orange: 1, yellow: 2, green: 3 };
+const SEVERITY_RANK: Record<string, number> = {
+  red: 0,
+  orange: 1,
+  yellow: 2,
+  green: 3,
+};
 const SEVERITY_COLORS = new Set(["red", "orange", "yellow", "green"]);
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 /** "Sat Jul 11 12:57:00 IST 2026" -> Date. Fixed +05:30 offset (source is always IST). */
 function parseSachetTime(s: string | undefined): Date | null {
   if (!s) return null;
-  const m = s.match(/^\w{3} (\w{3}) (\d{1,2}) (\d{2}):(\d{2}):(\d{2}) IST (\d{4})$/);
+  const m = s.match(
+    /^\w{3} (\w{3}) (\d{1,2}) (\d{2}):(\d{2}):(\d{2}) IST (\d{4})$/,
+  );
   if (!m) return null;
   const [, mon, day, hh, mm, ss, year] = m;
   const monthIdx = MONTHS.indexOf(mon);
   if (monthIdx < 0) return null;
-  const utcMs = Date.UTC(+year, monthIdx, +day, +hh, +mm, +ss) - (5 * 60 + 30) * 60_000;
+  const utcMs =
+    Date.UTC(+year, monthIdx, +day, +hh, +mm, +ss) - (5 * 60 + 30) * 60_000;
   return new Date(utcMs);
 }
 
@@ -45,7 +71,14 @@ function parseSachetTime(s: string | undefined): Date | null {
  */
 export async function fetchAdvisories(state: string): Promise<Advisory[]> {
   try {
-    const res = await fetch(SACHET_URL, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const res = await withRetry(
+      () => fetch(SACHET_URL, { signal: AbortSignal.timeout(TIMEOUT_MS) }),
+      {
+        maxAttempts: 2,
+        onRetry: (a, e) =>
+          log.warn("retrying SACHET fetch", { attempt: a, error: String(e) }),
+      },
+    );
     if (!res.ok) return [];
     const json = await res.json();
 
@@ -73,10 +106,13 @@ export async function fetchAdvisories(state: string): Promise<Advisory[]> {
       areaDescription: r.area_description ?? "",
       message: r.warning_message ?? "",
       source: r.alert_source ?? "NDMA SACHET",
-      effectiveEnd: parseSachetTime(r.effective_end_time)?.toISOString() ?? null,
+      effectiveEnd:
+        parseSachetTime(r.effective_end_time)?.toISOString() ?? null,
     }));
 
-    advisories.sort((a, b) => SEVERITY_RANK[a.severityColor] - SEVERITY_RANK[b.severityColor]);
+    advisories.sort(
+      (a, b) => SEVERITY_RANK[a.severityColor] - SEVERITY_RANK[b.severityColor],
+    );
     return advisories.slice(0, 5);
   } catch {
     return [];
