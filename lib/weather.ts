@@ -3,6 +3,10 @@ import type { WeatherSummary } from "./types";
 // Open-Meteo — free, no API key required.
 const GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
+// BigDataCloud's free client-geocoding endpoint — no key, documented for this
+// exact use case. `principalSubdivision` matches Open-Meteo's admin1 naming.
+const REVERSE_GEOCODE_URL =
+  "https://api.bigdatacloud.net/data/reverse-geocode-client";
 
 const FORECAST_HORIZON_HOURS = 12;
 
@@ -11,6 +15,7 @@ export interface GeoLocation {
   longitude: number;
   /** Display name, e.g. "Kothrud, Maharashtra". */
   place: string;
+  state: string | null;
 }
 
 interface GeocodeResponse {
@@ -21,6 +26,13 @@ interface GeocodeResponse {
     admin1?: string;
     country?: string;
   }>;
+}
+
+interface ReverseGeocodeResponse {
+  city?: string;
+  locality?: string;
+  principalSubdivision?: string;
+  countryName?: string;
 }
 
 interface ForecastResponse {
@@ -43,12 +55,19 @@ class WeatherError extends Error {}
 async function fetchJson<T>(url: string, what: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "application/json" } });
+    res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
   } catch {
-    throw new WeatherError(`Could not reach the weather service (${what}). Check your connection.`);
+    throw new WeatherError(
+      `Could not reach the weather service (${what}). Check your connection.`,
+    );
   }
   if (!res.ok) {
-    throw new WeatherError(`Weather service error while ${what} (${res.status}).`);
+    throw new WeatherError(
+      `Weather service error while ${what} (${res.status}).`,
+    );
   }
   return (await res.json()) as T;
 }
@@ -64,32 +83,72 @@ export { WeatherError };
  */
 export async function geocodePlace(name: string): Promise<GeoLocation> {
   const original = name.trim();
-  const parts = original.split(",").map((p) => p.trim()).filter(Boolean);
+  const parts = original
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
   // Candidates: full string first, then parts right-to-left (city before locality).
   const candidates = [original, ...parts.slice().reverse()].filter(
     (c, i, arr) => c && arr.indexOf(c) === i,
   );
 
-  for (const candidate of candidates) {
-    const url = `${GEOCODE_URL}?name=${encodeURIComponent(candidate)}&count=1&language=en&format=json`;
-    const data = await fetchJson<GeocodeResponse>(url, "finding your area");
-    const hit = data.results?.[0];
-    if (hit) {
-      const matched = [hit.name, hit.admin1].filter(Boolean).join(", ");
-      // Prefer the user's own words when they were more specific (multi-part).
-      const place = parts.length > 1 ? original : matched;
-      return { latitude: hit.latitude, longitude: hit.longitude, place };
+  const results = await Promise.allSettled(
+    candidates.map((candidate) => {
+      const url = `${GEOCODE_URL}?name=${encodeURIComponent(candidate)}&count=1&language=en&format=json`;
+      return fetchJson<GeocodeResponse>(url, "finding your area");
+    }),
+  );
+
+  for (let i = 0; i < candidates.length; i++) {
+    const r = results[i];
+    if (r.status === "fulfilled") {
+      const hit = r.value.results?.[0];
+      if (hit) {
+        const matched = [hit.name, hit.admin1].filter(Boolean).join(", ");
+        // Prefer the user's own words when they were more specific (multi-part).
+        const place = parts.length > 1 ? original : matched;
+        return {
+          latitude: hit.latitude,
+          longitude: hit.longitude,
+          place,
+          state: hit.admin1 ?? null,
+        };
+      }
     }
   }
 
-  throw new WeatherError(`Couldn't find "${original}". Try a nearby city or a more specific area.`);
+  throw new WeatherError(
+    `Couldn't find "${original}". Try a nearby city or a more specific area.`,
+  );
 }
 
-/** Reverse-geocode coordinates to a friendly place name; falls back to a coord string. */
-export async function reverseGeocode(lat: number, lon: number): Promise<string> {
-  // Open-Meteo has no reverse endpoint; nearest-name via a tiny forward search is unreliable,
-  // so we present a rounded coordinate label. Kept intentionally simple per spec scope.
-  return `Your location (${lat.toFixed(2)}, ${lon.toFixed(2)})`;
+/**
+ * Reverse-geocode coordinates (from browser geolocation) to a place name + state.
+ * Falls back to a rounded coordinate label if the lookup fails — geolocation
+ * should never be blocked by a reverse-geocoding hiccup.
+ */
+export async function reverseGeocode(
+  lat: number,
+  lon: number,
+): Promise<{ place: string; state: string | null }> {
+  try {
+    const url = `${REVERSE_GEOCODE_URL}?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
+    const data = await fetchJson<ReverseGeocodeResponse>(
+      url,
+      "finding your area",
+    );
+    const city = data.city || data.locality;
+    const place = [city, data.principalSubdivision].filter(Boolean).join(", ");
+    return {
+      place: place || `Your location (${lat.toFixed(2)}, ${lon.toFixed(2)})`,
+      state: data.principalSubdivision ?? null,
+    };
+  } catch {
+    return {
+      place: `Your location (${lat.toFixed(2)}, ${lon.toFixed(2)})`,
+      state: null,
+    };
+  }
 }
 
 /**
@@ -100,6 +159,7 @@ export async function getWeatherSummary(
   latitude: number,
   longitude: number,
   place: string,
+  state: string | null,
 ): Promise<WeatherSummary> {
   const url =
     `${FORECAST_URL}?latitude=${latitude}&longitude=${longitude}` +
@@ -112,7 +172,9 @@ export async function getWeatherSummary(
   const current = data.current;
   const hourly = data.hourly;
   if (!current || !hourly?.time?.length) {
-    throw new WeatherError("The forecast came back empty. Please try again in a moment.");
+    throw new WeatherError(
+      "The forecast came back empty. Please try again in a moment.",
+    );
   }
 
   const { next12hRainMm, peakWindow, hoursToPeak } = summarizeHourly(
@@ -123,6 +185,9 @@ export async function getWeatherSummary(
 
   return {
     place,
+    state,
+    latitude,
+    longitude,
     tempC: round1(current.temperature_2m),
     currentRainMm: round1(current.precipitation),
     windKmh: round1(current.wind_speed_10m),
@@ -156,15 +221,21 @@ export function summarizeHourly(
 
   // No meaningful rain in the window.
   if (peakVal <= 0) {
-    return { next12hRainMm: total, peakWindow: "No significant rain expected", hoursToPeak: 0 };
+    return {
+      next12hRainMm: total,
+      peakWindow: "No significant rain expected",
+      hoursToPeak: 0,
+    };
   }
 
   // Build a window from the contiguous run of "significant" hours around the peak.
   const threshold = Math.max(0.5, peakVal * 0.3);
   let runStart = peakIdx;
   let runEnd = peakIdx;
-  while (runStart > startIdx && (precipitation[runStart - 1] ?? 0) >= threshold) runStart--;
-  while (runEnd < endIdx - 1 && (precipitation[runEnd + 1] ?? 0) >= threshold) runEnd++;
+  while (runStart > startIdx && (precipitation[runStart - 1] ?? 0) >= threshold)
+    runStart--;
+  while (runEnd < endIdx - 1 && (precipitation[runEnd + 1] ?? 0) >= threshold)
+    runEnd++;
 
   const peakWindow = `${hhmm(times[runStart])}–${hhmm(times[runEnd + 1] ?? times[runEnd])}`;
   const hoursToPeak = Math.max(0, peakIdx - startIdx);

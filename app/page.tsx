@@ -1,19 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, RefreshCw, SlidersHorizontal } from "lucide-react";
-import type { Lang, Plan, Profile, WeatherSummary } from "@/lib/types";
+import type { Lang, Plan, Profile } from "@/lib/types";
 import { severityFromRain } from "@/lib/severity";
 import { STRINGS } from "@/lib/i18n";
-import {
-  fetchPlan,
-  fetchWeatherByCoords,
-  fetchWeatherByPlace,
-} from "@/lib/client";
-import { buildChatContext } from "@/lib/prompts";
-import InputCard, { type LocationInput } from "@/components/InputCard";
-import ProfileChips from "@/components/ProfileChips";
-import LanguageToggle from "@/components/LanguageToggle";
+import { fetchPlan } from "@/lib/client";
+import { useLiveWeather } from "@/lib/useLiveWeather";
+import LocationGate from "@/components/LocationGate";
+import ConditionsBar from "@/components/ConditionsBar";
+import EmergencyContactsCard from "@/components/EmergencyContactsCard";
+import AdvisoryCard from "@/components/AdvisoryCard";
+import PlanRequestCard from "@/components/PlanRequestCard";
 import SeverityBanner from "@/components/SeverityBanner";
 import PlanView from "@/components/PlanView";
 import ChatBox from "@/components/ChatBox";
@@ -32,170 +29,102 @@ const DEFAULT_PROFILE: Profile = {
 export default function Home() {
   const [lang, setLang] = useState<Lang>("en");
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
-  const [weather, setWeather] = useState<WeatherSummary | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [locationLabel, setLocationLabel] = useState("your area");
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
 
+  const live = useLiveWeather();
   const t = STRINGS[lang];
 
-  // Initial flow: fetch live weather, then generate the plan.
-  async function handleSubmit(loc: LocationInput) {
-    setError(null);
-    setLoading(true);
-    setLocationLabel("place" in loc ? loc.place : "your area");
+  async function handleGeneratePlan() {
+    if (!live.weather) return;
+    setPlanLoading(true);
+    setPlanError(null);
     try {
-      const w =
-        "place" in loc
-          ? await fetchWeatherByPlace(loc.place)
-          : await fetchWeatherByCoords(loc.lat, loc.lon);
-      setWeather(w);
-      setLocationLabel(w.place);
-      const p = await fetchPlan(profile, w, lang);
-      setPlan(p);
+      setPlan(await fetchPlan(profile, live.weather, lang));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-      setWeather(null);
-      setPlan(null);
+      setPlanError(
+        err instanceof Error ? err.message : "Something went wrong.",
+      );
     } finally {
-      setLoading(false);
+      setPlanLoading(false);
     }
   }
 
-  // Same storm, different household/language — reuses cached weather (no refetch).
-  async function handleRegenerate() {
-    if (!weather) return;
-    setError(null);
-    setLoading(true);
-    try {
-      const p = await fetchPlan(profile, weather, lang);
-      setPlan(p);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
+  if (!live.weather) {
+    if (live.refreshing) {
+      return <Loader messages={t.locatingWeather} />;
     }
+    return (
+      <LocationGate
+        lang={lang}
+        busy={live.refreshing}
+        error={live.error}
+        onSubmit={live.load}
+      />
+    );
   }
 
-  function handleNewPlan() {
-    setPlan(null);
-    setWeather(null);
-    setError(null);
-  }
-
-  const showResult = plan !== null && weather !== null;
+  const severity = severityFromRain(live.weather.next12hRainMm);
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-6 md:max-w-2xl md:px-6 md:py-10 lg:max-w-6xl lg:px-8">
-      {loading ? (
-        <Loader messages={t.loading(locationLabel)} />
-      ) : showResult ? (
-        <ResultScreen
-          plan={plan}
-          weather={weather}
-          profile={profile}
-          lang={lang}
-          error={error}
-          onProfileChange={setProfile}
-          onLangChange={setLang}
-          onRegenerate={handleRegenerate}
-          onNewPlan={handleNewPlan}
-        />
-      ) : (
-        <div className="mx-auto w-full max-w-md lg:max-w-xl">
-          <InputCard
-            profile={profile}
-            lang={lang}
-            busy={loading}
-            error={error}
-            onProfileChange={setProfile}
-            onLangChange={setLang}
-            onSubmit={handleSubmit}
-          />
-        </div>
-      )}
-    </main>
-  );
-}
-
-function ResultScreen({
-  plan,
-  weather,
-  profile,
-  lang,
-  error,
-  onProfileChange,
-  onLangChange,
-  onRegenerate,
-  onNewPlan,
-}: {
-  plan: Plan;
-  weather: WeatherSummary;
-  profile: Profile;
-  lang: Lang;
-  error: string | null;
-  onProfileChange: (p: Profile) => void;
-  onLangChange: (l: Lang) => void;
-  onRegenerate: () => void;
-  onNewPlan: () => void;
-}) {
-  const t = STRINGS[lang];
-  const severity = severityFromRain(weather.next12hRainMm);
-
-  return (
-    <div className="flex flex-col gap-4 lg:gap-6">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onNewPlan}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-900"
-        >
-          <ArrowLeft size={16} strokeWidth={2.25} aria-hidden />
-          {t.newPlan}
-        </button>
-        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
-          {weather.place}
-        </span>
-      </div>
-
-      <SeverityBanner
+    <>
+      <ConditionsBar
+        weather={live.weather}
         severity={severity}
-        headline={plan.headline}
-        peakWindow={weather.peakWindow}
+        lastUpdated={live.lastUpdated}
+        refreshing={live.refreshing}
+        onRefresh={live.refresh}
+        onChangeLocation={live.reset}
         lang={lang}
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start lg:gap-6">
-        <div className="lg:col-span-2">
-          <PlanView plan={plan} lang={lang} />
+      <main className="mx-auto w-full max-w-md px-4 py-6 md:max-w-2xl md:px-6 md:py-8 lg:max-w-6xl lg:px-8">
+        <div className="flex flex-col gap-4">
+          <EmergencyContactsCard
+            place={live.weather.place}
+            state={live.weather.state}
+            lang={lang}
+          />
+          <AdvisoryCard state={live.weather.state} lang={lang} />
         </div>
 
-        <div className="flex flex-col gap-4 lg:sticky lg:top-6">
-          {/* Adjust household / language and regenerate against the SAME storm. */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-              <SlidersHorizontal size={18} strokeWidth={2.25} className="text-blue-700" aria-hidden />
-              {t.adjustTitle}
-            </h2>
-            <ProfileChips profile={profile} lang={lang} onChange={onProfileChange} />
-            <div className="mt-4">
-              <LanguageToggle value={lang} onChange={onLangChange} />
-            </div>
-            {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-            <button
-              type="button"
-              onClick={onRegenerate}
-              className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 font-semibold text-white transition-colors hover:bg-blue-800 active:translate-y-px"
-            >
-              <RefreshCw size={18} strokeWidth={2.25} aria-hidden />
-              {t.regenerate}
-            </button>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:mt-6 lg:grid-cols-3 lg:items-start lg:gap-6">
+          <div className="lg:col-span-2 flex flex-col gap-4">
+            {planLoading ? (
+              <Loader messages={t.loading(live.weather.place)} />
+            ) : plan ? (
+              <>
+                <SeverityBanner
+                  severity={severity}
+                  headline={plan.headline}
+                  peakWindow={live.weather.peakWindow}
+                  lang={lang}
+                />
+                <PlanView plan={plan} lang={lang} />
+              </>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-8 text-center text-slate-500">
+                {t.emptyPlanPrompt}
+              </div>
+            )}
           </div>
 
-          <ChatBox lang={lang} context={buildChatContext(profile, weather)} />
+          <div className="flex flex-col gap-4 lg:sticky lg:top-20">
+            <PlanRequestCard
+              profile={profile}
+              lang={lang}
+              mode={plan ? "regenerate" : "initial"}
+              busy={planLoading}
+              error={planError}
+              onProfileChange={setProfile}
+              onLangChange={setLang}
+              onSubmit={handleGeneratePlan}
+            />
+            <ChatBox lang={lang} profile={profile} weather={live.weather} />
+          </div>
         </div>
-      </div>
-    </div>
+      </main>
+    </>
   );
 }

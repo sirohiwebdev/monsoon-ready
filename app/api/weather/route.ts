@@ -20,16 +20,30 @@ export async function GET(req: Request) {
       const latitude = Number(lat);
       const longitude = Number(lon);
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return NextResponse.json({ error: "Invalid coordinates." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Invalid coordinates." },
+          { status: 400 },
+        );
       }
-      const name = await reverseGeocode(latitude, longitude);
-      const summary = await getWeatherSummary(latitude, longitude, name);
+      const { place: name, state } = await reverseGeocode(latitude, longitude);
+      const summary = await getWeatherSummary(latitude, longitude, name, state);
       return NextResponse.json(summary);
     }
 
     if (place) {
+      if (place.length > 200) {
+        return NextResponse.json(
+          { error: "Place name is too long. Please try a shorter name." },
+          { status: 400 },
+        );
+      }
       const geo = await geocodePlace(place);
-      const summary = await getWeatherSummary(geo.latitude, geo.longitude, geo.place);
+      const summary = await getWeatherSummary(
+        geo.latitude,
+        geo.longitude,
+        geo.place,
+        geo.state,
+      );
       return NextResponse.json(summary);
     }
 

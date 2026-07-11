@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getClient, MissingKeyError, MODEL } from "@/lib/llm";
 import { buildPlanMessages } from "@/lib/prompts";
 import { planSchema } from "@/lib/plan-schema";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 // Validate the client request so a bad body fails fast with a clear message.
 const requestSchema = z.object({
@@ -16,7 +17,10 @@ const requestSchema = z.object({
     hasPets: z.boolean(),
   }),
   weather: z.object({
-    place: z.string(),
+    place: z.string().trim().min(1).max(200),
+    state: z.string().nullable(),
+    latitude: z.number(),
+    longitude: z.number(),
     tempC: z.number(),
     currentRainMm: z.number(),
     windKmh: z.number(),
@@ -32,14 +36,27 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 },
+    );
   }
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Missing or invalid plan inputs." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing or invalid plan inputs." },
+      { status: 400 },
+    );
   }
   const { profile, weather, lang } = parsed.data;
+
+  if (!rateLimit(getClientIp(req))) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a minute and try again." },
+      { status: 429 },
+    );
+  }
 
   try {
     const client = getClient();
@@ -53,19 +70,28 @@ export async function POST(req: Request) {
 
     const raw = completion.choices[0]?.message?.content;
     if (!raw) {
-      return NextResponse.json({ error: "The AI returned an empty plan. Try again." }, { status: 502 });
+      return NextResponse.json(
+        { error: "The AI returned an empty plan. Try again." },
+        { status: 502 },
+      );
     }
 
     let json: unknown;
     try {
       json = JSON.parse(raw);
     } catch {
-      return NextResponse.json({ error: "The AI returned malformed JSON. Try again." }, { status: 502 });
+      return NextResponse.json(
+        { error: "The AI returned malformed JSON. Try again." },
+        { status: 502 },
+      );
     }
 
     const plan = planSchema.safeParse(json);
     if (!plan.success) {
-      console.error("[/api/plan] plan failed schema validation:", plan.error.issues);
+      console.error(
+        "[/api/plan] plan failed schema validation:",
+        plan.error.issues,
+      );
       return NextResponse.json(
         { error: "The AI plan was incomplete. Please try again." },
         { status: 502 },
@@ -76,6 +102,23 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof MissingKeyError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    if (err instanceof Error && "status" in err) {
+      const status = (err as { status: number }).status;
+      if (status === 404) {
+        console.error("[/api/plan] model not found:", MODEL);
+        return NextResponse.json(
+          { error: "The AI model is unavailable. Please contact support." },
+          { status: 502 },
+        );
+      }
+      if (status === 429) {
+        console.error("[/api/plan] OpenAI rate limit hit");
+        return NextResponse.json(
+          { error: "The AI service is busy. Please try again in a moment." },
+          { status: 503 },
+        );
+      }
     }
     console.error("[/api/plan] unexpected error:", err);
     return NextResponse.json(

@@ -2,17 +2,17 @@
 
 import { useRef, useState } from "react";
 import { MessageCircle, SendHorizontal } from "lucide-react";
-import type { ChatMessage, Lang } from "@/lib/types";
+import type { ChatMessage, Lang, Profile, WeatherSummary } from "@/lib/types";
 import { STRINGS } from "@/lib/i18n";
 import { fetchChatAnswer } from "@/lib/client";
 
 interface ChatBoxProps {
   lang: Lang;
-  /** Compact weather+profile context string for grounding answers. */
-  context: string;
+  profile: Profile;
+  weather: WeatherSummary;
 }
 
-export default function ChatBox({ lang, context }: ChatBoxProps) {
+export default function ChatBox({ lang, profile, weather }: ChatBoxProps) {
   const t = STRINGS[lang];
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -26,14 +26,23 @@ export default function ChatBox({ lang, context }: ChatBoxProps) {
 
     setError(null);
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: question }]);
+    setMessages((m) => [
+      ...m,
+      { id: crypto.randomUUID(), role: "user", content: question },
+    ]);
     setBusy(true);
 
     try {
-      const answer = await fetchChatAnswer(question, context, lang);
-      setMessages((m) => [...m, { role: "assistant", content: answer }]);
+      const answer = await fetchChatAnswer(question, profile, weather, lang);
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: "assistant", content: answer },
+      ]);
       requestAnimationFrame(() =>
-        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }),
+        scrollRef.current?.scrollTo({
+          top: scrollRef.current.scrollHeight,
+          behavior: "smooth",
+        }),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -45,15 +54,23 @@ export default function ChatBox({ lang, context }: ChatBoxProps) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-        <MessageCircle size={18} strokeWidth={2.25} className="text-blue-700" aria-hidden />
+        <MessageCircle
+          size={18}
+          strokeWidth={2.25}
+          className="text-blue-700"
+          aria-hidden
+        />
         {t.chatTitle}
       </h2>
 
       {messages.length > 0 && (
-        <div ref={scrollRef} className="mb-3 flex max-h-64 flex-col gap-2 overflow-y-auto">
-          {messages.map((m, i) => (
+        <div
+          ref={scrollRef}
+          className="mb-3 flex max-h-64 flex-col gap-2 overflow-y-auto"
+        >
+          {messages.map((m) => (
             <div
-              key={i}
+              key={m.id}
               className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed ${
                 m.role === "user"
                   ? "self-end bg-blue-700 text-white"
