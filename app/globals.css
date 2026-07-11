@@ -20,8 +20,14 @@ body {
   color: var(--foreground);
   background: var(--background);
   /* Inter for Latin; Devanagari glyphs fall through to Noto Sans Devanagari. */
-  font-family: var(--font-inter), var(--font-devanagari), system-ui, -apple-system,
-    "Segoe UI", Roboto, sans-serif;
+  font-family:
+    var(--font-inter),
+    var(--font-devanagari),
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -85,5 +91,27 @@ body {
   .pulse-severe {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* ── Print: only show the plan, hide everything else ── */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  /* The plan container and its descendants stay visible */
+  .print-plan,
+  .print-plan * {
+    visibility: visible;
+  }
+  .print-plan {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  /* Hide the copy/export buttons in print output */
+  .no-print {
+    display: none !important;
   }
 }

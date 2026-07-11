@@ -45,6 +45,10 @@ export interface UIStrings {
   sourceLabel: string;
   noAdvisories: string;
   emptyPlanPrompt: string;
+  copyPlan: string;
+  copied: string;
+  printPlan: string;
+  planTitle: string;
 }
 
 export const STRINGS: Record<Lang, UIStrings> = {
@@ -106,6 +110,10 @@ export const STRINGS: Record<Lang, UIStrings> = {
     noAdvisories: "No official weather advisories for your area right now.",
     emptyPlanPrompt:
       "Fill in your household details and tap Get my safety plan to see a personalized action plan here.",
+    copyPlan: "Copy plan",
+    copied: "Copied!",
+    printPlan: "Export",
+    planTitle: "Monsoon Safety Plan",
   },
   hi: {
     tagline: "आपकी अपनी मानसून सुरक्षा योजना",
@@ -165,6 +173,10 @@ export const STRINGS: Record<Lang, UIStrings> = {
     noAdvisories: "अभी आपके क्षेत्र के लिए कोई आधिकारिक मौसम चेतावनी नहीं है।",
     emptyPlanPrompt:
       "अपने परिवार का विवरण भरें और अपनी सुरक्षा योजना पाएं पर टैप करें — यहां आपकी व्यक्तिगत योजना दिखाई देगी।",
+    copyPlan: "योजना कॉपी करें",
+    copied: "कॉपी हुई!",
+    printPlan: "निर्यात",
+    planTitle: "मानसून सुरक्षा योजना",
   },
   mr: {
     tagline: "तुमची स्वतःची पावसाळी सुरक्षा योजना",
@@ -224,5 +236,9 @@ export const STRINGS: Record<Lang, UIStrings> = {
     noAdvisories: "सध्या तुमच्या भागासाठी कोणतीही अधिकृत हवामान सूचना नाही.",
     emptyPlanPrompt:
       "तुमच्या कुटुंबाचे तपशील भरा आणि माझी सुरक्षा योजना मिळवा वर टॅप करा — तुमची वैयक्तिक योजना इथे दिसेल.",
+    copyPlan: "योजना कॉपी करा",
+    copied: "कॉपी झाली!",
+    printPlan: "निर्यात",
+    planTitle: "पावसाळी सुरक्षा योजना",
   },
 };
