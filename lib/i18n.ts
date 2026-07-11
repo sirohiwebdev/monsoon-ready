@@ -38,6 +38,7 @@ export interface UIStrings {
   changeLocation: string;
   updated: string;
   refresh: string;
+  next12hTitle: string;
   emergencyTitle: string;
   moreNumbers: (n: number) => string;
   advisoryTitle: string;
@@ -102,6 +103,7 @@ export const STRINGS: Record<Lang, UIStrings> = {
     changeLocation: "Change location",
     updated: "Updated",
     refresh: "Refresh",
+    next12hTitle: "Forecast rainfall over the next 12 hours",
     emergencyTitle: "Emergency",
     moreNumbers: (n) => `More numbers (${n})`,
     advisoryTitle: "Official advisories",
@@ -165,6 +167,7 @@ export const STRINGS: Record<Lang, UIStrings> = {
     changeLocation: "स्थान बदलें",
     updated: "अपडेट किया गया",
     refresh: "रीफ्रेश करें",
+    next12hTitle: "अगले 12 घंटों में अनुमानित वर्षा",
     emergencyTitle: "आपातकालीन",
     moreNumbers: (n) => `और नंबर (${n})`,
     advisoryTitle: "आधिकारिक सूचनाएं",
@@ -228,6 +231,7 @@ export const STRINGS: Record<Lang, UIStrings> = {
     changeLocation: "स्थान बदला",
     updated: "अपडेट केले",
     refresh: "रिफ्रेश करा",
+    next12hTitle: "पुढील 12 तासांतील अंदाजित पाऊस",
     emergencyTitle: "आपत्कालीन",
     moreNumbers: (n) => `आणखी क्रमांक (${n})`,
     advisoryTitle: "अधिकृत सूचना",

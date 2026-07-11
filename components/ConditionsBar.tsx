@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, Pencil, RefreshCw, Thermometer } from "lucide-react";
+import { CloudRain, MapPin, Pencil, RefreshCw, Thermometer } from "lucide-react";
 import type { Lang, WeatherSummary } from "@/lib/types";
 import type { SeverityInfo } from "@/lib/severity";
 import { STRINGS } from "@/lib/i18n";
@@ -63,8 +63,12 @@ export default function ConditionsBar({
           {t.severityLabel[severity.level]}
         </span>
 
-        <span className="tnum inline-flex items-center gap-1 text-sm text-slate-600">
-          {weather.currentRainMm} mm
+        <span
+          className="tnum inline-flex items-center gap-1 text-sm text-slate-600"
+          title={t.next12hTitle}
+        >
+          <CloudRain size={14} strokeWidth={2.25} className="text-slate-400" aria-hidden />
+          {weather.next12hRainMm} mm <span className="text-slate-400">/12h</span>
         </span>
         <span className="tnum inline-flex items-center gap-1 text-sm text-slate-600">
           <Thermometer
