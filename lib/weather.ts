@@ -1,6 +1,7 @@
 import type { WeatherSummary } from "./types";
 import { withRetry } from "./retry";
 import { createLogger } from "./logger";
+import { z } from "zod";
 
 const log = createLogger("weather");
 
@@ -22,41 +23,53 @@ export interface GeoLocation {
   state: string | null;
 }
 
-interface GeocodeResponse {
-  results?: Array<{
-    latitude: number;
-    longitude: number;
-    name: string;
-    admin1?: string;
-    country?: string;
-  }>;
-}
+const geocodeResponseSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        latitude: z.number(),
+        longitude: z.number(),
+        name: z.string(),
+        admin1: z.string().optional(),
+        country: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
 
-interface ReverseGeocodeResponse {
-  city?: string;
-  locality?: string;
-  principalSubdivision?: string;
-  countryName?: string;
-}
+const reverseGeocodeResponseSchema = z.object({
+  city: z.string().optional(),
+  locality: z.string().optional(),
+  principalSubdivision: z.string().optional(),
+  countryName: z.string().optional(),
+});
 
-interface ForecastResponse {
-  current?: {
-    time: string;
-    temperature_2m: number;
-    precipitation: number;
-    weather_code: number;
-    wind_speed_10m: number;
-  };
-  hourly?: {
-    time: string[];
-    precipitation: number[];
-    precipitation_probability: number[];
-  };
-}
+const forecastResponseSchema = z.object({
+  current: z
+    .object({
+      time: z.string(),
+      temperature_2m: z.number(),
+      precipitation: z.number(),
+      weather_code: z.number().optional(),
+      wind_speed_10m: z.number(),
+    })
+    .optional(),
+  hourly: z
+    .object({
+      time: z.array(z.string()),
+      precipitation: z.array(z.number()),
+      precipitation_probability: z.array(z.number()).optional(),
+    })
+    .optional(),
+});
 
 class WeatherError extends Error {}
 
-async function fetchJson<T>(url: string, what: string): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  what: string,
+  schema: z.ZodType<T>,
+): Promise<T> {
   let res: Response;
   try {
     res = await withRetry(
@@ -81,7 +94,18 @@ async function fetchJson<T>(url: string, what: string): Promise<T> {
       `Weather service error while ${what} (${res.status}).`,
     );
   }
-  return (await res.json()) as T;
+  const json = await res.json();
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) {
+    log.warn("weather response parse failed", {
+      what,
+      issues: parsed.error.issues,
+    });
+    throw new WeatherError(
+      `Weather service returned an unexpected response while ${what}.`,
+    );
+  }
+  return parsed.data;
 }
 
 export { WeatherError };
@@ -107,7 +131,7 @@ export async function geocodePlace(name: string): Promise<GeoLocation> {
   const results = await Promise.allSettled(
     candidates.map((candidate) => {
       const url = `${GEOCODE_URL}?name=${encodeURIComponent(candidate)}&count=1&language=en&format=json`;
-      return fetchJson<GeocodeResponse>(url, "finding your area");
+      return fetchJson(url, "finding your area", geocodeResponseSchema);
     }),
   );
 
@@ -145,9 +169,10 @@ export async function reverseGeocode(
 ): Promise<{ place: string; state: string | null }> {
   try {
     const url = `${REVERSE_GEOCODE_URL}?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
-    const data = await fetchJson<ReverseGeocodeResponse>(
+    const data = await fetchJson(
       url,
       "finding your area",
+      reverseGeocodeResponseSchema,
     );
     const city = data.city || data.locality;
     const place = [city, data.principalSubdivision].filter(Boolean).join(", ");
@@ -179,7 +204,11 @@ export async function getWeatherSummary(
     `&hourly=precipitation,precipitation_probability` +
     `&forecast_days=2&timezone=auto`;
 
-  const data = await fetchJson<ForecastResponse>(url, "reading the forecast");
+  const data = await fetchJson(
+    url,
+    "reading the forecast",
+    forecastResponseSchema,
+  );
 
   const current = data.current;
   const hourly = data.hourly;

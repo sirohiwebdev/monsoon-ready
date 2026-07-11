@@ -75,7 +75,12 @@ export default function Home() {
         lastUpdated={live.lastUpdated}
         refreshing={live.refreshing}
         onRefresh={live.refresh}
-        onChangeLocation={live.reset}
+        onChangeLocation={() => {
+          setPlan(null);
+          setPlanError(null);
+          setPlanLoading(false);
+          live.reset();
+        }}
         lang={lang}
       />
 

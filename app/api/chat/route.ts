@@ -32,6 +32,10 @@ const requestSchema = z.object({
   lang: z.enum(["en", "hi", "mr"]),
 });
 
+const chatAnswerSchema = z.object({
+  answer: z.string().trim().min(1),
+});
+
 // POST /api/chat  { question, profile, weather, lang } -> { answer: string }
 export async function POST(req: Request) {
   let body: unknown;
@@ -70,15 +74,19 @@ export async function POST(req: Request) {
       messages: buildChatMessages(question, context, lang),
     });
 
-    const answer = completion.choices[0]?.message?.content?.trim();
-    if (!answer) {
+    const raw = completion.choices[0]?.message?.content?.trim();
+    const parsed = chatAnswerSchema.safeParse({ answer: raw });
+    if (!parsed.success) {
+      log.error("chat answer failed validation", {
+        issues: parsed.error.issues,
+      });
       return NextResponse.json(
-        { error: "No answer came back. Try rephrasing." },
+        { error: "The AI answer was incomplete. Try again." },
         { status: 502 },
       );
     }
 
-    return NextResponse.json({ answer });
+    return NextResponse.json(parsed.data);
   } catch (err) {
     if (err instanceof MissingKeyError) {
       return NextResponse.json({ error: err.message }, { status: 503 });

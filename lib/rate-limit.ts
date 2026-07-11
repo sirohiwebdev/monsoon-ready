@@ -61,6 +61,10 @@ export function rateLimit(ip: string, s: RateLimitStore = store): boolean {
 }
 
 export function getClientIp(req: Request): string {
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf) return cf.trim();
+  const real = req.headers.get("x-real-ip");
+  if (real) return real.trim();
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
   return "unknown";

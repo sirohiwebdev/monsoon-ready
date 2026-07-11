@@ -6,6 +6,7 @@ import {
   WeatherError,
 } from "@/lib/weather";
 import { createLogger } from "@/lib/logger";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const log = createLogger("/api/weather");
 
@@ -17,6 +18,13 @@ export async function GET(req: Request) {
   const place = searchParams.get("place")?.trim();
   const lat = searchParams.get("lat");
   const lon = searchParams.get("lon");
+
+  if (!rateLimit(getClientIp(req))) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a minute and try again." },
+      { status: 429 },
+    );
+  }
 
   try {
     if (lat && lon) {
